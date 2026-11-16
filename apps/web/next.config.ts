@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   },
   cacheComponents: true,
   partialPrefetching: true,
+  transpilePackages: ["@scope-guard/scope"],
   turbopack: {
     rules: {
       "*.css": {
