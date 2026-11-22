@@ -46,7 +46,10 @@ export const ReasonCode = z.enum([
   'INVALID_TARGET',
   'TOOL_CLASS_NOT_ALLOWED',
   'PORT_NOT_ALLOWED',
+  'PROTOCOL_NOT_ALLOWED',
   'RESOLVED_IP_OUT_OF_SCOPE',
+  'RESOLUTION_REQUIRED',
+  'CNAME_OUT_OF_SCOPE',
   'INCLUDED',
 ]);
 export type ReasonCode = z.infer<typeof ReasonCode>;

@@ -7,7 +7,6 @@ import {
 import {
   normalizeDomain,
   normalizeWildcard,
-  NormalizeResult,
 } from './normalize';
 import { parseIp, parseCidr } from './ip';
 import { normalizeUrlPrefix } from './url';
@@ -49,7 +48,9 @@ export function compileRule(rule: RawRule): CompileResult {
   const base: RawBaseRule = {
     id: rule.id,
     effect: rule.effect,
-    ...(rule.ports !== undefined ? { ports: Object.freeze([...rule.ports]) } : {}),
+    ...(rule.ports !== undefined
+      ? { ports: Object.freeze([...rule.ports]) }
+      : {}),
     ...(rule.protocols !== undefined
       ? { protocols: Object.freeze([...rule.protocols]) }
       : {}),
@@ -85,7 +86,11 @@ export function compileRule(rule: RawRule): CompileResult {
       }
       return {
         ok: true,
-        rule: Object.freeze({ ...base, targetType: 'wildcard', base: res.value }),
+        rule: Object.freeze({
+          ...base,
+          targetType: 'wildcard',
+          base: res.value,
+        }),
       };
     }
 
