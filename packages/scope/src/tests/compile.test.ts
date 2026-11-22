@@ -139,6 +139,27 @@ describe('compileRule: target types', () => {
     });
   });
 
+  it('collapses a mapped IPv6 URL host to IPv4', () => {
+    const rule: RawRule = {
+      id: 'r-url-mapped',
+      targetType: 'url_prefix',
+      effect: 'exclude',
+      pattern: 'https://[::ffff:10.0.0.1]/x',
+    };
+    expect(compileRule(rule)).toStrictEqual({
+      ok: true,
+      rule: {
+        id: 'r-url-mapped',
+        effect: 'exclude',
+        targetType: 'url_prefix',
+        scheme: 'https',
+        host: '10.0.0.1',
+        port: 443,
+        path: '/x',
+      },
+    });
+  });
+
   it('fails IP rule with invalid pattern', () => {
     const rule: RawRule = {
       id: 'r-ip-bad',
@@ -318,7 +339,8 @@ describe('compileRule: target types', () => {
     expect(compileRule(userinfoRule)).toStrictEqual({
       ok: false,
       ruleId: 'r-url-userinfo',
-      message: 'Invalid URL prefix pattern "https://user:pass@example.com/admin"',
+      message:
+        'Invalid URL prefix pattern "https://user:pass@example.com/admin"',
     });
 
     const fragmentRule: RawRule = {
@@ -403,7 +425,7 @@ describe('compileRule: target types', () => {
   });
 });
 
-describe('compileRule: immutability and options handling', () => {
+describe('compileRule: metadata and immutability', () => {
   it('preserves ports, protocols, toolClasses and omits notes', () => {
     const rule: RawRule = {
       id: 'r-meta',
@@ -461,7 +483,7 @@ describe('compileRule: immutability and options handling', () => {
 });
 
 describe('compileScope: valid input', () => {
-  it.each(sampleRules)('compiles fixture $id ($targetType)', (rule) => {
+  it.each(sampleRules)('compiles fixture $id ($targetType)', rule => {
     const res = compileRule(rule);
     expect(res.ok).toBe(true);
   });
@@ -478,7 +500,7 @@ describe('compileScope: valid input', () => {
       expect(res.scope.createdAt).toBe(sampleScopeVersion.createdAt);
       expect(res.scope.rules).toHaveLength(sampleRules.length);
       expect(Object.isFrozen(res.scope)).toBe(true);
-      expect(Object.isFrozen(res.scope.rules)).toBe(true);
+      expect(res.scope.rules.every(r => Object.isFrozen(r))).toBe(true);
     }
   });
 });
@@ -500,7 +522,9 @@ describe('compileScope: invalid input & schema failures', () => {
     const res = compileScope(invalid);
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      expect(res.errors[0]?.message).toMatch(/notAfter: must be after notBefore/);
+      expect(res.errors[0]?.message).toMatch(
+        /notAfter: must be after notBefore/
+      );
     }
   });
 
@@ -531,7 +555,7 @@ describe('compileScope: rule compilation errors', () => {
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.errors).toHaveLength(3);
-      expect(res.errors.map((e) => e.ruleId)).toStrictEqual([
+      expect(res.errors.map(e => e.ruleId)).toStrictEqual([
         'bad-1',
         'bad-2',
         'bad-3',
@@ -539,4 +563,3 @@ describe('compileScope: rule compilation errors', () => {
     }
   });
 });
-
