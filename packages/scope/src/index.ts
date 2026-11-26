@@ -17,6 +17,8 @@ export type {
   CompileResult,
   CompileError,
 } from './compile';
+export { computeScopeHash } from './hash';
+export type { HashableScope } from './hash';
 
 // ============================================================================
 // 2. Target Parsing & Normalization

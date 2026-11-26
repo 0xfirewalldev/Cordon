@@ -3,6 +3,7 @@ import { sampleScopeVersion } from '../__fixtures__/rules';
 import { compileScope } from '../compile';
 import type { CompiledScope } from '../compile';
 import { evaluate } from '../evaluate';
+import { computeScopeHash } from '../hash';
 import { parseIp } from '../ip';
 import type { EvalContext, IpHost, Resolution, Target } from '../target';
 import { Decision } from '../types';
@@ -13,10 +14,11 @@ const passive: EvalContext = { now: NOW, toolClass: 'passive' };
 const active: EvalContext = { now: NOW, toolClass: 'active-light' };
 
 const build = (rules: Omit<RawRule, 'id'>[]): CompiledScope => {
-  const result = compileScope({
+  const draft = {
     ...sampleScopeVersion,
     rules: rules.map((r, i) => ({ id: `r${i + 1}`, ...r })),
-  });
+  };
+  const result = compileScope({ ...draft, hash: computeScopeHash(draft) });
   if (!result.ok) throw new Error(JSON.stringify(result.errors));
   return result.scope;
 };

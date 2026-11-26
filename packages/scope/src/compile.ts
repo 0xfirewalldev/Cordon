@@ -4,12 +4,10 @@ import {
   type Protocol,
   type ToolClass,
 } from './types';
-import {
-  normalizeDomain,
-  normalizeWildcard,
-} from './normalize';
+import { normalizeDomain, normalizeWildcard } from './normalize';
 import { parseIp, parseCidr } from './ip';
 import { normalizeUrlPrefix } from './url';
+import { computeScopeHash } from './hash';
 
 type RawBaseRule = {
   readonly id: string;
@@ -233,6 +231,28 @@ export function compileScope(input: unknown): CompileScopeResult {
 
   if (errors.length > 0) {
     return { ok: false, errors };
+  }
+
+  // Checked last, so authors see rule errors first. A stale hash after editing
+  // a bad rule is expected and not worth reporting alongside it.
+  let expectedHash: string;
+  try {
+    expectedHash = computeScopeHash(scope);
+  } catch {
+    return {
+      ok: false,
+      errors: [{ message: 'hash: scope content could not be serialized' }],
+    };
+  }
+  if (scope.hash !== expectedHash) {
+    return {
+      ok: false,
+      errors: [
+        {
+          message: `hash: does not match the scope content (expected ${expectedHash})`,
+        },
+      ],
+    };
   }
 
   return {
