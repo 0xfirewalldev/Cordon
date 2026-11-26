@@ -1,104 +1,153 @@
-import { z } from 'zod';
+import { describe, expect, it } from 'vitest';
 import {
-  AuthFailurePayload,
-  DecisionPayload,
-  EngagementStatusChangedPayload,
-  RunFinishedPayload,
-  RunStartedPayload,
-  ScopeVersionApprovedPayload,
-  ScopeVersionCreatedPayload,
-} from '../events';
-import { EpochMs, Id, Sha256Hash } from '../primitives';
+  makeAuthFailureEvent,
+  makeDecisionEvent,
+  makeRunFinishedEvent,
+  makeRunStartedEvent,
+  makeStatusChangedEvent,
+  SAMPLE_ENGAGEMENT_ID,
+  SAMPLE_HASH,
+} from '../__fixtures__/event';
+import { GENESIS_PREV_HASH } from '../chain';
+import { Actor, AuditEvent, AuditRecord } from '../types';
 
-/**
- * Who did it. A person, a worker and the platform itself are different things
- * when someone asks who approved a scope change, so the kind is recorded.
- */
-export const Actor = z
-  .object({
-    kind: z.enum(['user', 'service', 'system']),
-    id: Id,
-  })
-  .strict();
-export type Actor = z.infer<typeof Actor>;
+describe('Actor', () => {
+  it('accepts user, service, and system actors', () => {
+    for (const kind of ['user', 'service', 'system'] as const) {
+      expect(Actor.safeParse({ kind, id: 'actor-1' }).success).toBe(true);
+    }
+  });
 
-/** Supplied by the caller. */
-const eventFields = {
-  engagementId: Id,
-  actor: Actor,
-};
+  it('rejects unknown kinds, empty ids, and extra keys', () => {
+    expect(Actor.safeParse({ kind: 'bot', id: 'a' }).success).toBe(false);
+    expect(Actor.safeParse({ kind: 'user', id: '' }).success).toBe(false);
+    expect(Actor.safeParse({ kind: 'user', id: 'a', extra: 1 }).success).toBe(
+      false,
+    );
+  });
+});
 
-/**
- * Assigned by the log, never by the caller:
- * - seq starts at 0 (the genesis record)
- * - timestamp comes from the log's injected clock, so an actor can't backdate an event
- * - prevHash and hash are computed by chain.ts
- */
-const assignedFields = {
-  seq: z.number().int().nonnegative(),
-  timestamp: EpochMs,
-  prevHash: Sha256Hash,
-  hash: Sha256Hash,
-};
+describe('AuditEvent', () => {
+  it('parses all supported event variants', () => {
+    const events = [
+      makeDecisionEvent(),
+      makeRunStartedEvent(),
+      makeRunFinishedEvent(),
+      makeAuthFailureEvent(),
+      makeStatusChangedEvent(),
+      {
+        engagementId: SAMPLE_ENGAGEMENT_ID,
+        actor: { kind: 'user' as const, id: 'alice' },
+        type: 'scope_version_created' as const,
+        payload: {
+          scopeVersionId: 'sv-1',
+          versionHash: SAMPLE_HASH,
+          ruleCount: 3,
+          notBefore: 1000,
+          notAfter: 2000,
+        },
+      },
+      {
+        engagementId: SAMPLE_ENGAGEMENT_ID,
+        actor: { kind: 'user' as const, id: 'bob' },
+        type: 'scope_version_approved' as const,
+        payload: {
+          scopeVersionId: 'sv-1',
+          versionHash: SAMPLE_HASH,
+        },
+      },
+    ];
 
-/**
- * Builds the event and record schemas for one event type from the same pieces,
- * so the two can't drift. Each is a single strict object: an intersection of
- * two strict objects would reject every input.
- */
-function variant<T extends string, P extends z.ZodType>(
-  type: T,
-  payload: P,
-) {
-  const fields = { type: z.literal(type), payload };
-  return {
-    event: z.object({ ...eventFields, ...fields }).strict(),
-    record: z.object({ ...eventFields, ...assignedFields, ...fields }).strict(),
-  };
-}
+    for (const ev of events) {
+      expect(AuditEvent.safeParse(ev).success).toBe(true);
+    }
+  });
 
-const decision = variant('decision', DecisionPayload);
-const scopeVersionCreated = variant(
-  'scope_version_created',
-  ScopeVersionCreatedPayload,
-);
-const scopeVersionApproved = variant(
-  'scope_version_approved',
-  ScopeVersionApprovedPayload,
-);
-const engagementStatusChanged = variant(
-  'engagement_status_changed',
-  EngagementStatusChangedPayload,
-);
-const runStarted = variant('run_started', RunStartedPayload);
-const runFinished = variant('run_finished', RunFinishedPayload);
-const authFailure = variant('auth_failure', AuthFailurePayload);
+  it('rejects caller-supplied assigned fields (seq, timestamp, prevHash, hash)', () => {
+    const ev = makeRunFinishedEvent();
+    expect(AuditEvent.safeParse({ ...ev, seq: 0 }).success).toBe(false);
+    expect(AuditEvent.safeParse({ ...ev, timestamp: 1000 }).success).toBe(false);
+    expect(
+      AuditEvent.safeParse({ ...ev, prevHash: GENESIS_PREV_HASH }).success,
+    ).toBe(false);
+    expect(AuditEvent.safeParse({ ...ev, hash: SAMPLE_HASH }).success).toBe(
+      false,
+    );
+  });
 
-/** What a caller hands to the log. Carries no seq, timestamp or hashes. */
-export const AuditEvent = z.discriminatedUnion('type', [
-  decision.event,
-  scopeVersionCreated.event,
-  scopeVersionApproved.event,
-  engagementStatusChanged.event,
-  runStarted.event,
-  runFinished.event,
-  authFailure.event,
-]);
-export type AuditEvent = z.infer<typeof AuditEvent>;
-export type AuditEventType = AuditEvent['type'];
+  it('rejects mismatched type and payload', () => {
+    const ev = makeRunFinishedEvent();
+    expect(
+      AuditEvent.safeParse({ ...ev, type: 'auth_failure' }).success,
+    ).toBe(false);
+  });
+});
 
-/**
- * What the log stores: the event plus the assigned fields. This only checks
- * shape. Whether `hash` is correct and `prevHash` links to the previous
- * record is chain.ts's job.
- */
-export const AuditRecord = z.discriminatedUnion('type', [
-  decision.record,
-  scopeVersionCreated.record,
-  scopeVersionApproved.record,
-  engagementStatusChanged.record,
-  runStarted.record,
-  runFinished.record,
-  authFailure.record,
-]);
-export type AuditRecord = z.infer<typeof AuditRecord>;
+describe('AuditRecord', () => {
+  it('parses a complete record and rejects missing chain metadata', () => {
+    const ev = makeRunFinishedEvent();
+    expect(AuditRecord.safeParse(ev).success).toBe(false);
+    expect(
+      AuditRecord.safeParse({
+        ...ev,
+        seq: 0,
+        timestamp: 1000,
+        prevHash: GENESIS_PREV_HASH,
+        hash: SAMPLE_HASH,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('a valid record never parses as an event (events have no chain metadata)', () => {
+    const record = {
+      engagementId: SAMPLE_ENGAGEMENT_ID,
+      actor: { kind: 'service' as const, id: 'worker-1' },
+      type: 'run_finished' as const,
+      payload: { runId: 'run-1', status: 'succeeded' as const },
+      seq: 0,
+      timestamp: 1000,
+      prevHash: GENESIS_PREV_HASH,
+      hash: SAMPLE_HASH,
+    };
+    // Record parses as AuditRecord
+    expect(AuditRecord.safeParse(record).success).toBe(true);
+    // Record does NOT parse as AuditEvent (strict: seq/timestamp/prevHash/hash are extra keys)
+    expect(AuditEvent.safeParse(record).success).toBe(false);
+  });
+
+  it('a valid event never parses as a record (records require chain metadata)', () => {
+    const ev = makeRunFinishedEvent();
+    // Event parses as AuditEvent
+    expect(AuditEvent.safeParse(ev).success).toBe(true);
+    // Event does NOT parse as AuditRecord (missing seq, timestamp, prevHash, hash)
+    expect(AuditRecord.safeParse(ev).success).toBe(false);
+  });
+
+  it('rejects a record with a missing engagementId', () => {
+    const base = {
+      actor: { kind: 'service' as const, id: 'worker-1' },
+      type: 'run_finished' as const,
+      payload: { runId: 'run-1', status: 'succeeded' as const },
+      seq: 0,
+      timestamp: 1000,
+      prevHash: GENESIS_PREV_HASH,
+      hash: SAMPLE_HASH,
+    };
+    expect(AuditRecord.safeParse(base).success).toBe(false);
+    expect(AuditEvent.safeParse({ ...base, engagementId: '' }).success).toBe(false);
+  });
+
+  it('rejects a record with a missing actor', () => {
+    const base = {
+      engagementId: SAMPLE_ENGAGEMENT_ID,
+      type: 'run_finished' as const,
+      payload: { runId: 'run-1', status: 'succeeded' as const },
+      seq: 0,
+      timestamp: 1000,
+      prevHash: GENESIS_PREV_HASH,
+      hash: SAMPLE_HASH,
+    };
+    expect(AuditRecord.safeParse(base).success).toBe(false);
+    expect(AuditEvent.safeParse(base).success).toBe(false);
+  });
+});

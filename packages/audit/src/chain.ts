@@ -29,7 +29,8 @@ export type ChainErrorCode =
   | 'PREV_HASH_MISMATCH'
   | 'TIMESTAMP_REGRESSION'
   | 'HASH_MISMATCH'
-  | 'HEAD_MISMATCH';
+  | 'HEAD_MISMATCH'
+  | 'STORE_ERROR';
 
 /** Where records[0] must sit: its seq, the hash it must link to, and the previous timestamp. */
 export type ChainPosition = {
