@@ -25,6 +25,7 @@ export type { HashableScope } from './hash';
 // ============================================================================
 export { parseTarget } from './parse-target';
 export type { ParseTargetResult } from './parse-target';
+export { hostToString } from './format';
 
 export type {
   Target,

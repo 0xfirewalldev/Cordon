@@ -79,14 +79,14 @@ function parseIpv6(raw: string): bigint | null {
   return value;
 }
 
-function formatIpv4(value: bigint): string {
+export function formatIpv4(value: bigint): string {
   return [24n, 16n, 8n, 0n]
     .map((shift) => String(Number((value >> shift) & 0xffn)))
     .join('.');
 }
 
 /** RFC 5952: lowercase, no leading zeros, longest zero run (>= 2 groups, first on ties) compressed. */
-function formatIpv6(value: bigint): string {
+export function formatIpv6(value: bigint): string {
   const groups: number[] = [];
   for (let i = 7; i >= 0; i--) {
     groups.push(Number((value >> BigInt(i * 16)) & 0xffffn));
