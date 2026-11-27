@@ -457,4 +457,43 @@ describe('createAuditLog', () => {
     // Attempting to push a redacted record into the store fails
     await expect(store.append(redacted as unknown as AuditRecord)).rejects.toThrow();
   });
+
+  it('head and list reject garbage records from the store without leaking ZodError', async () => {
+    const garbageStore: AuditStore = {
+      head: async () => ({ garbage: true }) as unknown as AuditRecord,
+      append: async () => {},
+      list: async () => [{ garbage: true }] as unknown as AuditRecord[],
+    };
+    const log = createAuditLog({ store: garbageStore });
+
+    await expect(log.head(SAMPLE_ENGAGEMENT_ID)).rejects.toThrow(
+      'Store returned an invalid chain head',
+    );
+    await expect(log.list(SAMPLE_ENGAGEMENT_ID)).rejects.toThrow(
+      'Store returned an invalid audit record',
+    );
+  });
+
+  it("head and list reject records belonging to another engagement", async () => {
+    const store = createMemoryStore();
+    const log = createAuditLog({ store, now: () => 1000 });
+    const seed = await log.append(
+      makeRunFinishedEvent('run-seed', 'succeeded', 'eng-a'),
+    );
+    expect(seed.ok).toBe(true);
+
+    const foreignStore: AuditStore = {
+      head: () => store.head('eng-a'),
+      append: (r) => store.append(r),
+      list: (_id, opts) => store.list('eng-a', opts),
+    };
+    const logForeign = createAuditLog({ store: foreignStore });
+
+    await expect(logForeign.head('eng-b')).rejects.toThrow(
+      'Store returned an invalid chain head',
+    );
+    await expect(logForeign.list('eng-b')).rejects.toThrow(
+      'Store returned an invalid audit record',
+    );
+  });
 });

@@ -71,8 +71,9 @@ describe('computeRecordHash', () => {
     expect(computeRecordHash(fixed)).toBe(
       sha256Hex(`scope-guard.audit.v1\n${canonical}`),
     );
-    // After the first green run, also paste the digest here as a literal, so a
-    // change to the format can never go unnoticed.
+    expect(computeRecordHash(fixed)).toBe(
+      '1b744dd16cb2d3048ba7ced7d754379ba3085e3d19f60342304be1ad595b631e',
+    );
   });
 
   it('is deterministic, and independent of key order', () => {

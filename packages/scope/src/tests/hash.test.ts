@@ -40,8 +40,9 @@ describe('computeScopeHash: format', () => {
     expect(computeScopeHash(single)).toBe(
       sha256Hex(`scope-guard.scope.v1\n${canonical}`),
     );
-    // After the first green run, also paste the digest here as a literal, so a
-    // change to the format can never go unnoticed.
+    expect(computeScopeHash(single)).toBe(
+      '780613a2e38cda1a0df3ab619157aa3a0c04f3e95c0c59a9836ab2c80fec8b16',
+    );
   });
 
   it('returns 64 lowercase hex characters and is deterministic', () => {

@@ -188,7 +188,12 @@ export function createAuditLog(options: AuditLogOptions): AuditLog {
 
     async head(engagementId: string): Promise<AuditRecord | null> {
       const record = await store.head(engagementId);
-      return record === null ? null : AuditRecord.parse(record);
+      if (record === null) return null;
+      const parsed = AuditRecord.safeParse(record);
+      if (!parsed.success || parsed.data.engagementId !== engagementId) {
+        throw new Error('Store returned an invalid chain head');
+      }
+      return parsed.data;
     },
 
     async list(
@@ -196,7 +201,13 @@ export function createAuditLog(options: AuditLogOptions): AuditLog {
       listOptions?: ListOptions,
     ): Promise<readonly AuditRecord[]> {
       const records = await store.list(engagementId, listOptions);
-      return records.map((r) => AuditRecord.parse(r));
+      return records.map((r) => {
+        const parsed = AuditRecord.safeParse(r);
+        if (!parsed.success || parsed.data.engagementId !== engagementId) {
+          throw new Error('Store returned an invalid audit record');
+        }
+        return parsed.data;
+      });
     },
 
     async verify(
